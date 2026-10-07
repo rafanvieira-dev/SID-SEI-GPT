@@ -168,160 +168,102 @@ const seed = {
   ]
 };
 
-let db = carregarBanco();
+let db = loadDB();
 let currentView = "dashboard";
 
-function carregarBanco() {
-  const dados = localStorage.getItem(STORAGE_KEY);
+function loadDB() {
+  const saved = localStorage.getItem(STORAGE_KEY);
 
-  if (!dados) {
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify(seed)
-    );
-
-    return JSON.parse(
-      JSON.stringify(seed)
-    );
+  if (!saved) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(seed));
+    return structuredClone(seed);
   }
 
   try {
-    return JSON.parse(dados);
-  } catch (erro) {
-    return JSON.parse(
-      JSON.stringify(seed)
-    );
+    return JSON.parse(saved);
+  } catch {
+    return structuredClone(seed);
   }
 }
 
-function salvarBanco() {
-  localStorage.setItem(
-    STORAGE_KEY,
-    JSON.stringify(db)
-  );
+function saveDB() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
 }
 
-function escapeHTML(valor) {
-  return String(valor ?? "").replace(
+function esc(value) {
+  return String(value ?? "").replace(
     /[&<>"']/g,
-    function(c) {
-      return {
-        "&": "&amp;",
-        "<": "&lt;",
-        ">": "&gt;",
-        '"': "&quot;",
-        "'": "&#039;"
-      }[c];
-    }
+    c => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#039;"
+    }[c])
   );
 }
 
-function dataAtual() {
-  return new Date()
-    .toISOString()
-    .slice(0, 10);
+function todayISO() {
+  return new Date().toISOString().slice(0, 10);
 }
 
-function dataHoraAtual() {
-  return new Date().toLocaleString(
-    "pt-BR",
-    {
-      dateStyle: "short",
-      timeStyle: "short"
-    }
-  );
-}
-
-function formatarData(data) {
-  if (!data) return "-";
-
-  const partes = data.split("-");
-
-  if (partes.length !== 3) {
-    return data;
-  }
-
-  return `${partes[2]}/${partes[1]}/${partes[0]}`;
-}
-
-function badgeStatus(status) {
-  const info =
-    statusMap[status] ||
-    ["gray", status];
-
-  return `
-    <span class="badge ${info[0]}">
-      ${escapeHTML(info[1])}
-    </span>
-  `;
-}
-
-function mostrarMensagem(texto) {
-  const toast =
-    document.getElementById("toast");
-
-  if (!toast) return;
-
-  toast.textContent = texto;
-  toast.classList.add("show");
-
-  clearTimeout(window.toastTimer);
-
-  window.toastTimer =
-    setTimeout(function() {
-      toast.classList.remove("show");
-    }, 2500);
-}
-
-function adicionarHistorico(
-  solicitacao,
-  acao,
-  usuario,
-  detalhe
-) {
-  db.history.unshift({
-    request: solicitacao,
-    date: dataHoraAtual(),
-    action: acao,
-    user: usuario,
-    detail: detalhe || ""
+function nowBR() {
+  return new Date().toLocaleString("pt-BR", {
+    dateStyle: "short",
+    timeStyle: "short"
   });
 }
 
-function buscarSolicitacao(id) {
-  return db.requests.find(
-    function(item) {
-      return item.id === id;
-    }
-  );
+function statusBadge(status) {
+  const m = statusMap[status] || ["gray", status];
+
+  return `<span class="badge ${m[0]}">${esc(m[1])}</span>`;
 }
 
-function gerarNumeroSolicitacao() {
-  const ano =
-    new Date().getFullYear();
+function toast(message) {
+  const el = document.getElementById("toast");
 
-  const numeros =
-    db.requests
-      .map(function(item) {
-        return Number(
-          item.id.split("-").pop()
-        );
-      })
-      .filter(function(numero) {
-        return Number.isFinite(numero);
-      });
+  if (!el) return;
 
-  const maior =
-    Math.max(0, ...numeros);
+  el.textContent = message;
+  el.classList.add("show");
 
-  const proximo =
-    String(maior + 1)
-      .padStart(5, "0");
+  clearTimeout(window.__toast);
 
-  return `SID-${ano}-${proximo}`;
+  window.__toast = setTimeout(() => {
+    el.classList.remove("show");
+  }, 2500);
 }
 
-const nomesViews = {
+function addHistory(request, action, user, detail = "") {
+  db.history.unshift({
+    request,
+    date: nowBR(),
+    action,
+    user,
+    detail
+  });
+}
+
+function getRequest(id) {
+  return db.requests.find(r => r.id === id);
+}
+
+function nextId() {
+  const years = new Date().getFullYear();
+
+  const nums = db.requests
+    .map(r => Number(r.id.split("-").pop()))
+    .filter(Number.isFinite);
+
+  const n = (Math.max(0, ...nums) + 1)
+    .toString()
+    .padStart(5, "0");
+
+  return `SID-${years}-${n}`;
+}
+
+const views = {
   dashboard: "Dashboard",
   solicitacoes: "Solicitações",
   recebimento: "Recebimento",
@@ -334,118 +276,160 @@ const nomesViews = {
   configuracoes: "Configurações"
 };
 
-function renderizar() {
+function render() {
   document
     .querySelectorAll(".nav-item")
-    .forEach(function(botao) {
-      botao.classList.toggle(
+    .forEach(btn => {
+      btn.classList.toggle(
         "active",
-        botao.dataset.view ===
-          currentView
+        btn.dataset.view === currentView
       );
     });
 
-  const breadcrumb =
-    document.getElementById(
-      "breadcrumb"
-    );
+  const breadcrumb = document.getElementById("breadcrumb");
 
   if (breadcrumb) {
-    breadcrumb.textContent =
-      nomesViews[currentView];
+    breadcrumb.textContent = views[currentView];
   }
 
-  const app =
-    document.getElementById("app");
+  const app = document.getElementById("app");
 
   if (app) {
-    app.innerHTML =
-      renderizarView(currentView);
+    app.innerHTML = renderView(currentView);
   }
 
-  configurarEventos();
+  bindViewEvents();
 }
 
-function renderizarView(view) {
-  switch (view) {
-    case "dashboard":
-      return dashboard();
-
-    case "solicitacoes":
-      return solicitacoes();
-
-    case "recebimento":
-      return etapa(
-        "Recebimento",
-        ["Recebido"],
-        "Registrar recebimento"
-      );
-
-    case "digitalizacao":
-      return etapa(
-        "Digitalização",
-        [
-          "Aguardando digitalização",
-          "Em digitalização",
-          "Reprovado"
-        ],
-        "Registrar digitalização"
-      );
-
-    case "conferencia":
-      return conferencia();
-
-    case "sei":
-      return insercaoSEI();
-
-    case "historico":
-      return historico();
-
-    case "relatorios":
-      return relatorios();
-
-    case "usuarios":
-      return usuarios();
-
-    case "configuracoes":
-      return configuracoes();
-
-    default:
-      return dashboard();
+function renderView(view) {
+  if (view === "dashboard") {
+    return dashboardView();
   }
-}
 
-function dashboard() {
-  const total =
-    db.requests.length;
+  if (view === "solicitacoes") {
+    return requestsView();
+  }
 
-  const andamento =
-    db.requests.filter(
-      function(item) {
-        return item.status !==
-          "Concluído";
-      }
-    ).length;
-
-  const concluidas =
-    db.requests.filter(
-      function(item) {
-        return item.status ===
-          "Concluído";
-      }
-    ).length;
-
-  const paginas =
-    db.requests.reduce(
-      function(total, item) {
-        return total +
-          Number(item.pages || 0);
-      },
-      0
+  /*
+   * CORREÇÃO PRINCIPAL:
+   *
+   * Uma nova solicitação nasce com status "Solicitação".
+   * Portanto ela precisa aparecer na fila de Recebimento.
+   *
+   * Também mantemos "Recebido" para permitir que registros
+   * antigos/demonstração continuem funcionando.
+   */
+  if (view === "recebimento") {
+    return stageView(
+      "Recebimento",
+      ["Solicitação", "Recebido"],
+      "Registrar recebimento"
     );
+  }
 
-  const recentes =
-    db.requests.slice(0, 5);
+  if (view === "digitalizacao") {
+    return stageView(
+      "Digitalização",
+      [
+        "Aguardando digitalização",
+        "Em digitalização",
+        "Reprovado"
+      ],
+      "Registrar digitalização"
+    );
+  }
+
+  if (view === "conferencia") {
+    return conferenceView();
+  }
+
+  if (view === "sei") {
+    return seiView();
+  }
+
+  if (view === "historico") {
+    return historyView();
+  }
+
+  if (view === "relatorios") {
+    return reportsView();
+  }
+
+  if (view === "usuarios") {
+    return usersView();
+  }
+
+  return settingsView();
+}
+
+function dashboardView() {
+  const total = db.requests.length;
+
+  const pending = db.requests.filter(
+    r => r.status !== "Concluído"
+  ).length;
+
+  const done = db.requests.filter(
+    r => r.status === "Concluído"
+  ).length;
+
+  const pages = db.requests.reduce(
+    (s, r) => s + (Number(r.pages) || 0),
+    0
+  );
+
+  const recent = db.requests.slice(0, 5);
+
+  const stageCounts = [
+    [
+      "Solicitação",
+      db.requests.filter(
+        r => r.status === "Solicitação"
+      ).length
+    ],
+
+    [
+      "Recebimento",
+      db.requests.filter(
+        r => ["Solicitação", "Recebido"].includes(r.status)
+      ).length
+    ],
+
+    [
+      "Digitalização",
+      db.requests.filter(
+        r =>
+          [
+            "Aguardando digitalização",
+            "Em digitalização",
+            "Reprovado"
+          ].includes(r.status)
+      ).length
+    ],
+
+    [
+      "Conferência",
+      db.requests.filter(
+        r => r.status === "Aguardando conferência"
+      ).length
+    ],
+
+    [
+      "Inserção SEI",
+      db.requests.filter(
+        r =>
+          [
+            "Aguardando inserção no SEI",
+            "Pendência SEI"
+          ].includes(r.status)
+      ).length
+    ],
+
+    [
+      "Conclusão",
+      done
+    ]
+  ];
 
   return `
     <div class="page-head">
@@ -454,8 +438,8 @@ function dashboard() {
         <h1>Visão geral</h1>
 
         <p>
-          Acompanhamento das atividades
-          de digitalização e inserção no SEI.
+          Acompanhamento das atividades de digitalização
+          e inserção no SEI.
         </p>
       </div>
 
@@ -474,6 +458,7 @@ function dashboard() {
         </button>
 
       </div>
+
     </div>
 
     <div class="hero-flow">
@@ -481,43 +466,44 @@ function dashboard() {
       <h2>Fluxo do processo</h2>
 
       <p>
-        Controle desde o recebimento
-        do documento físico até a conclusão
-        da inserção no SEI.
+        Controle desde o recebimento do documento físico
+        até a conclusão da inserção no SEI.
       </p>
 
       <div class="flow-mini">
 
-        ${[
-          "Solicitação",
-          "Recebimento",
-          "Digitalização",
-          "Conferência",
-          "Liberação",
-          "Inserção no SEI",
-          "Conclusão"
-        ].map(function(nome, indice) {
-
-          return `
-            <span class="flow-pill">
-              ${indice + 1}. ${nome}
-            </span>
-
-            ${
-              indice < 6
-                ? '<span class="flow-arrow">›</span>'
-                : ""
-            }
-          `;
-
-        }).join("")}
+        ${
+          [
+            "Solicitação",
+            "Recebimento",
+            "Digitalização",
+            "Conferência",
+            "Liberação",
+            "Inserção no SEI",
+            "Conclusão"
+          ]
+            .map(
+              (x, i) =>
+                `<span class="flow-pill">
+                  ${i + 1}. ${x}
+                </span>
+                ${
+                  i < 6
+                    ? '<span class="flow-arrow">›</span>'
+                    : ""
+                }`
+            )
+            .join("")
+        }
 
       </div>
+
     </div>
 
     <div class="stats">
 
       <div class="stat">
+
         <div class="stat-top">
           <span class="stat-label">
             Solicitações no período
@@ -535,9 +521,11 @@ function dashboard() {
         <div class="stat-note">
           Registros controlados pelo SID-SEI
         </div>
+
       </div>
 
       <div class="stat">
+
         <div class="stat-top">
           <span class="stat-label">
             Em andamento
@@ -549,15 +537,17 @@ function dashboard() {
         </div>
 
         <div class="stat-value">
-          ${andamento}
+          ${pending}
         </div>
 
         <div class="stat-note">
           Necessitam de alguma ação
         </div>
+
       </div>
 
       <div class="stat">
+
         <div class="stat-top">
           <span class="stat-label">
             Concluídas
@@ -569,15 +559,17 @@ function dashboard() {
         </div>
 
         <div class="stat-value">
-          ${concluidas}
+          ${done}
         </div>
 
         <div class="stat-note">
           Inserção no SEI registrada
         </div>
+
       </div>
 
       <div class="stat">
+
         <div class="stat-top">
           <span class="stat-label">
             Páginas digitalizadas
@@ -589,12 +581,13 @@ function dashboard() {
         </div>
 
         <div class="stat-value">
-          ${paginas.toLocaleString("pt-BR")}
+          ${pages.toLocaleString("pt-BR")}
         </div>
 
         <div class="stat-note">
           Total registrado nos documentos
         </div>
+
       </div>
 
     </div>
@@ -622,59 +615,63 @@ function dashboard() {
           <table>
 
             <thead>
+
               <tr>
                 <th>Solicitação</th>
                 <th>Unidade</th>
                 <th>Situação</th>
                 <th>Data</th>
               </tr>
+
             </thead>
 
             <tbody>
 
               ${
-                recentes.map(
-                  function(item) {
-
-                    return `
+                recent
+                  .map(
+                    r => `
                       <tr>
 
                         <td>
 
                           <button
                             class="link"
-                            data-detail="${escapeHTML(item.id)}">
-                            ${escapeHTML(item.id)}
+                            data-detail="${esc(r.id)}">
+                            ${esc(r.id)}
                           </button>
 
                           <br>
 
                           <span class="muted">
-                            ${escapeHTML(
-                              item.description
-                                .slice(0, 45)
+                            ${esc(
+                              r.description.slice(0, 45)
                             )}
+                            ${
+                              r.description.length > 45
+                                ? "…"
+                                : ""
+                            }
                           </span>
 
                         </td>
 
                         <td>
-                          ${escapeHTML(item.unit)}
+                          ${esc(r.unit)}
                         </td>
 
                         <td>
-                          ${badgeStatus(item.status)}
+                          ${statusBadge(r.status)}
                         </td>
 
                         <td>
-                          ${formatarData(item.date)}
+                          ${esc(formatDate(r.date))}
                         </td>
 
                       </tr>
-                    `;
-
-                  }
-                ).join("")
+                    `
+                  )
+                  .join("")
               }
 
             </tbody>
@@ -682,6 +679,7 @@ function dashboard() {
           </table>
 
         </div>
+
       </div>
 
       <div class="card">
@@ -700,7 +698,53 @@ function dashboard() {
 
         <div class="card-body">
 
-          ${criarIndicadoresEtapas(total)}
+          ${
+            stageCounts
+              .map(
+                ([name, count]) => `
+                  <div style="margin-bottom:13px">
+
+                    <div
+                      style="
+                        display:flex;
+                        justify-content:space-between;
+                        font-size:10px;
+                        margin-bottom:5px;
+                      "
+                    >
+
+                      <span>
+                        ${name}
+                      </span>
+
+                      <strong>
+                        ${count}
+                      </strong>
+
+                    </div>
+
+                    <div class="progress">
+
+                      <span
+                        style="
+                          width:${
+                            total
+                              ? Math.max(
+                                  (count / total) * 100,
+                                  count ? 4 : 0
+                                )
+                              : 0
+                          }%
+                        "
+                      ></span>
+
+                    </div>
+
+                  </div>
+                `
+              )
+              .join("")
+          }
 
         </div>
 
@@ -710,90 +754,7 @@ function dashboard() {
   `;
 }
 
-function criarIndicadoresEtapas(total) {
-
-  const etapas = [
-    ["Solicitação", ["Solicitação"]],
-    ["Recebimento", ["Recebido"]],
-    [
-      "Digitalização",
-      [
-        "Aguardando digitalização",
-        "Em digitalização",
-        "Reprovado"
-      ]
-    ],
-    [
-      "Conferência",
-      ["Aguardando conferência"]
-    ],
-    [
-      "Inserção SEI",
-      [
-        "Aguardando inserção no SEI",
-        "Pendência SEI"
-      ]
-    ],
-    ["Conclusão", ["Concluído"]]
-  ];
-
-  return etapas.map(
-    function(etapa) {
-
-      const quantidade =
-        db.requests.filter(
-          function(item) {
-            return etapa[1].includes(
-              item.status
-            );
-          }
-        ).length;
-
-      const percentual =
-        total > 0
-          ? Math.max(
-              (quantidade / total) * 100,
-              quantidade > 0 ? 4 : 0
-            )
-          : 0;
-
-      return `
-        <div style="margin-bottom:13px">
-
-          <div style="
-            display:flex;
-            justify-content:space-between;
-            font-size:10px;
-            margin-bottom:5px
-          ">
-
-            <span>
-              ${etapa[0]}
-            </span>
-
-            <strong>
-              ${quantidade}
-            </strong>
-
-          </div>
-
-          <div class="progress">
-
-            <span style="
-              width:${percentual}%
-            "></span>
-
-          </div>
-
-        </div>
-      `;
-
-    }
-  ).join("");
-}
-
-function solicitacoes() {
-
+function requestsView() {
   return `
     <div class="page-head">
 
@@ -804,8 +765,8 @@ function solicitacoes() {
         </h1>
 
         <p>
-          Cadastre, acompanhe e consulte
-          as solicitações recebidas das unidades.
+          Cadastre, acompanhe e consulte as solicitações
+          recebidas das unidades.
         </p>
 
       </div>
@@ -828,7 +789,8 @@ function solicitacoes() {
 
             <input
               id="requestSearch"
-              placeholder="Pesquisar por número, unidade, solicitante ou descrição...">
+              placeholder="Pesquisar por número, unidade, solicitante ou descrição..."
+            >
 
           </div>
 
@@ -840,15 +802,14 @@ function solicitacoes() {
               Todas as situações
             </option>
 
-            ${Object.keys(statusMap).map(
-              function(status) {
-                return `
-                  <option value="${escapeHTML(status)}">
-                    ${escapeHTML(status)}
-                  </option>
-                `;
-              }
-            ).join("")}
+            ${
+              Object.keys(statusMap)
+                .map(
+                  s =>
+                    `<option>${s}</option>`
+                )
+                .join("")
+            }
 
           </select>
 
@@ -860,15 +821,15 @@ function solicitacoes() {
               Todas prioridades
             </option>
 
-            <option value="Alta">
+            <option>
               Alta
             </option>
 
-            <option value="Normal">
+            <option>
               Normal
             </option>
 
-            <option value="Baixa">
+            <option>
               Baixa
             </option>
 
@@ -895,9 +856,7 @@ function solicitacoes() {
             </thead>
 
             <tbody id="requestsBody">
-
-              ${linhasSolicitacoes(db.requests)}
-
+              ${requestRows(db.requests)}
             </tbody>
 
           </table>
@@ -905,14 +864,13 @@ function solicitacoes() {
         </div>
 
       </div>
+
     </div>
   `;
 }
 
-function linhasSolicitacoes(lista) {
-
-  if (!lista.length) {
-
+function requestRows(rows) {
+  if (!rows.length) {
     return `
       <tr>
 
@@ -924,8 +882,7 @@ function linhasSolicitacoes(lista) {
               Nenhuma solicitação encontrada
             </strong>
 
-            Ajuste os filtros ou cadastre
-            uma nova solicitação.
+            Ajuste os filtros ou cadastre uma nova solicitação.
 
           </div>
 
@@ -935,103 +892,98 @@ function linhasSolicitacoes(lista) {
     `;
   }
 
-  return lista.map(
-    function(item) {
-
-      let prioridade;
-
-      if (item.priority === "Alta") {
-        prioridade =
-          '<span class="badge red">Alta</span>';
-      } else if (
-        item.priority === "Baixa"
-      ) {
-        prioridade =
-          '<span class="badge gray">Baixa</span>';
-      } else {
-        prioridade =
-          '<span class="badge blue">Normal</span>';
-      }
-
-      return `
+  return rows
+    .map(
+      r => `
         <tr>
 
           <td>
 
             <button
               class="link"
-              data-detail="${escapeHTML(item.id)}">
-              ${escapeHTML(item.id)}
+              data-detail="${esc(r.id)}">
+              ${esc(r.id)}
             </button>
 
             <br>
 
             <span class="muted">
-              ${escapeHTML(
-                item.description.slice(0, 34)
-              )}
+              ${esc(r.description.slice(0, 34))}
+              ${
+                r.description.length > 34
+                  ? "…"
+                  : ""
+              }
             </span>
 
           </td>
 
           <td>
 
-            ${escapeHTML(item.unit)}
+            ${esc(r.unit)}
 
             <br>
 
             <span class="muted">
-              ${escapeHTML(item.requester)}
+              ${esc(r.requester)}
             </span>
 
           </td>
 
           <td>
-            ${item.documents}
+            ${r.documents}
           </td>
 
           <td>
-            ${badgeStatus(item.status)}
+            ${statusBadge(r.status)}
           </td>
 
           <td>
-            ${prioridade}
+
+            ${
+              r.priority === "Alta"
+                ? '<span class="badge red">Alta</span>'
+                : r.priority === "Baixa"
+                ? '<span class="badge gray">Baixa</span>'
+                : '<span class="badge blue">Normal</span>'
+            }
+
           </td>
 
           <td>
-            ${formatarData(item.date)}
+            ${esc(formatDate(r.date))}
           </td>
 
           <td>
 
             <button
               class="btn sm"
-              data-detail="${escapeHTML(item.id)}">
+              data-detail="${esc(r.id)}">
               Abrir
             </button>
 
           </td>
 
         </tr>
-      `;
-    }
-  ).join("");
+      `
+    )
+    .join("");
 }
 
-function etapa(
-  titulo,
-  statusPermitidos,
-  textoBotao
-) {
+function formatDate(s) {
+  if (!s) return "-";
 
-  const lista =
-    db.requests.filter(
-      function(item) {
-        return statusPermitidos.includes(
-          item.status
-        );
-      }
-    );
+  const [y, m, d] = s.split("-");
+
+  return d && m && y
+    ? `${d}/${m}/${y}`
+    : s;
+}
+
+function stageView(title, statuses, actionLabel) {
+  const rows = db.requests.filter(
+    r => statuses.includes(r.status)
+  );
 
   return `
     <div class="page-head">
@@ -1039,12 +991,11 @@ function etapa(
       <div>
 
         <h1>
-          ${titulo}
+          ${title}
         </h1>
 
         <p>
-          Registros que demandam atuação
-          nesta etapa do fluxo.
+          Registros que demandam atuação nesta etapa do fluxo.
         </p>
 
       </div>
@@ -1053,11 +1004,12 @@ function etapa(
 
     <div
       class="notice"
-      style="margin-bottom:15px">
+      style="margin-bottom:15px"
+    >
 
       ${
-        titulo === "Recebimento"
-          ? "Registre o recebimento do documento físico para iniciar o controle operacional."
+        title === "Recebimento"
+          ? "As novas solicitações aparecem aqui. Registre o recebimento do documento físico para encaminhar a demanda para a digitalização."
           : "A situação do documento deve ser atualizada conforme a operação realizada e suas ocorrências."
       }
 
@@ -1085,64 +1037,62 @@ function etapa(
           <tbody>
 
             ${
-              lista.length
-                ? lista.map(
-                    function(item) {
-
-                      return `
+              rows.length
+                ? rows
+                    .map(
+                      r => `
                         <tr>
 
                           <td>
 
                             <button
                               class="link"
-                              data-detail="${escapeHTML(item.id)}">
-                              ${escapeHTML(item.id)}
+                              data-detail="${esc(r.id)}">
+                              ${esc(r.id)}
                             </button>
 
                             <br>
 
                             <span class="muted">
-                              ${escapeHTML(
-                                item.description
-                                  .slice(0, 40)
+                              ${esc(
+                                r.description.slice(0, 40)
                               )}
                             </span>
 
                           </td>
 
                           <td>
-                            ${escapeHTML(item.unit)}
+                            ${esc(r.unit)}
                           </td>
 
                           <td>
-                            ${badgeStatus(item.status)}
+                            ${statusBadge(r.status)}
                           </td>
 
                           <td>
-                            ${escapeHTML(
-                              item.responsible || "-"
+                            ${esc(
+                              r.responsible || "-"
                             )}
                           </td>
 
                           <td>
-                            ${formatarData(item.date)}
+                            ${formatDate(r.date)}
                           </td>
 
                           <td>
 
                             <button
                               class="btn sm primary"
-                              data-stage="${escapeHTML(item.id)}">
-                              ${textoBotao}
+                              data-stage="${esc(r.id)}">
+                              ${actionLabel}
                             </button>
 
                           </td>
 
                         </tr>
-                      `;
-                    }
-                  ).join("")
+                      `
+                    )
+                    .join("")
                 : `
                   <tr>
 
@@ -1154,8 +1104,7 @@ function etapa(
                           Nenhum item nesta etapa
                         </strong>
 
-                        Não há registros
-                        aguardando ação.
+                        Não há registros aguardando ação.
 
                       </div>
 
@@ -1170,21 +1119,19 @@ function etapa(
         </table>
 
       </div>
+
     </div>
   `;
 }
 
-function conferencia() {
-
-  const lista =
-    db.requests.filter(
-      function(item) {
-        return [
-          "Aguardando conferência",
-          "Reprovado"
-        ].includes(item.status);
-      }
-    );
+function conferenceView() {
+  const rows = db.requests.filter(
+    r =>
+      [
+        "Aguardando conferência",
+        "Reprovado"
+      ].includes(r.status)
+  );
 
   return `
     <div class="page-head">
@@ -1196,8 +1143,8 @@ function conferencia() {
         </h1>
 
         <p>
-          Verifique correspondência e completude
-          antes da liberação para o SEI.
+          Verifique correspondência e completude antes
+          da liberação para o SEI.
         </p>
 
       </div>
@@ -1226,49 +1173,48 @@ function conferencia() {
           <tbody>
 
             ${
-              lista.length
-                ? lista.map(
-                    function(item) {
-
-                      return `
+              rows.length
+                ? rows
+                    .map(
+                      r => `
                         <tr>
 
                           <td>
 
                             <button
                               class="link"
-                              data-detail="${escapeHTML(item.id)}">
-                              ${escapeHTML(item.id)}
+                              data-detail="${esc(r.id)}">
+                              ${esc(r.id)}
                             </button>
 
                             <br>
 
                             <span class="muted">
-                              ${escapeHTML(
-                                item.description.slice(0, 35)
+                              ${esc(
+                                r.description.slice(0, 35)
                               )}
                             </span>
 
                           </td>
 
                           <td>
-                            ${escapeHTML(
-                              item.file ||
+                            ${esc(
+                              r.file ||
                               "Não associado"
                             )}
                           </td>
 
                           <td>
-                            ${item.pages || 0}
+                            ${r.pages || 0}
                           </td>
 
                           <td>
-                            ${badgeStatus(item.status)}
+                            ${statusBadge(r.status)}
                           </td>
 
                           <td>
-                            ${escapeHTML(
-                              item.responsible || "-"
+                            ${esc(
+                              r.responsible || "-"
                             )}
                           </td>
 
@@ -1276,16 +1222,16 @@ function conferencia() {
 
                             <button
                               class="btn sm primary"
-                              data-conference="${escapeHTML(item.id)}">
+                              data-conference="${esc(r.id)}">
                               Conferir
                             </button>
 
                           </td>
 
                         </tr>
-                      `;
-                    }
-                  ).join("")
+                      `
+                    )
+                    .join("")
                 : `
                   <tr>
 
@@ -1310,21 +1256,19 @@ function conferencia() {
         </table>
 
       </div>
+
     </div>
   `;
 }
 
-function insercaoSEI() {
-
-  const lista =
-    db.requests.filter(
-      function(item) {
-        return [
-          "Aguardando inserção no SEI",
-          "Pendência SEI"
-        ].includes(item.status);
-      }
-    );
+function seiView() {
+  const rows = db.requests.filter(
+    r =>
+      [
+        "Aguardando inserção no SEI",
+        "Pendência SEI"
+      ].includes(r.status)
+  );
 
   return `
     <div class="page-head">
@@ -1336,8 +1280,8 @@ function insercaoSEI() {
         </h1>
 
         <p>
-          Registre as informações referentes
-          à inserção do documento no SEI.
+          Registre as informações referentes à
+          inserção do documento no SEI.
         </p>
 
       </div>
@@ -1366,48 +1310,45 @@ function insercaoSEI() {
           <tbody>
 
             ${
-              lista.length
-                ? lista.map(
-                    function(item) {
-
-                      return `
+              rows.length
+                ? rows
+                    .map(
+                      r => `
                         <tr>
 
                           <td>
 
                             <button
                               class="link"
-                              data-detail="${escapeHTML(item.id)}">
-                              ${escapeHTML(item.id)}
+                              data-detail="${esc(r.id)}">
+                              ${esc(r.id)}
                             </button>
 
                             <br>
 
                             <span class="muted">
-                              ${escapeHTML(
-                                item.description.slice(0, 38)
+                              ${esc(
+                                r.description.slice(0, 38)
                               )}
                             </span>
 
                           </td>
 
                           <td>
-                            ${escapeHTML(item.unit)}
+                            ${esc(r.unit)}
                           </td>
 
                           <td>
-                            ${badgeStatus(item.status)}
+                            ${statusBadge(r.status)}
                           </td>
 
                           <td>
-                            ${escapeHTML(
-                              item.sei || "—"
-                            )}
+                            ${esc(r.sei || "—")}
                           </td>
 
                           <td>
-                            ${escapeHTML(
-                              item.responsible || "-"
+                            ${esc(
+                              r.responsible || "-"
                             )}
                           </td>
 
@@ -1415,16 +1356,16 @@ function insercaoSEI() {
 
                             <button
                               class="btn sm primary"
-                              data-sei="${escapeHTML(item.id)}">
+                              data-sei="${esc(r.id)}">
                               Registrar inserção
                             </button>
 
                           </td>
 
                         </tr>
-                      `;
-                    }
-                  ).join("")
+                      `
+                    )
+                    .join("")
                 : `
                   <tr>
 
@@ -1449,12 +1390,12 @@ function insercaoSEI() {
         </table>
 
       </div>
+
     </div>
   `;
 }
 
-function historico() {
-
+function historyView() {
   return `
     <div class="page-head">
 
@@ -1465,8 +1406,7 @@ function historico() {
         </h1>
 
         <p>
-          Registro das operações realizadas
-          e dos responsáveis.
+          Registro das operações realizadas e dos responsáveis.
         </p>
 
       </div>
@@ -1483,7 +1423,8 @@ function historico() {
 
             <input
               id="historySearch"
-              placeholder="Pesquisar por solicitação, ação ou usuário...">
+              placeholder="Pesquisar por solicitação, ação ou usuário..."
+            >
 
           </div>
 
@@ -1492,20 +1433,17 @@ function historico() {
         <div
           class="timeline"
           id="historyList">
-
-          ${linhasHistorico(db.history)}
-
+          ${historyRows(db.history)}
         </div>
 
       </div>
+
     </div>
   `;
 }
 
-function linhasHistorico(lista) {
-
-  if (!lista.length) {
-
+function historyRows(rows) {
+  if (!rows.length) {
     return `
       <div class="empty">
 
@@ -1517,10 +1455,9 @@ function linhasHistorico(lista) {
     `;
   }
 
-  return lista.map(
-    function(item) {
-
-      return `
+  return rows
+    .map(
+      h => `
         <div class="timeline-item">
 
           <div class="timeline-rail">
@@ -1535,80 +1472,55 @@ function linhasHistorico(lista) {
 
             <strong>
 
-              ${escapeHTML(item.action)}
+              ${esc(h.action)}
 
               <span class="muted">
-                · ${escapeHTML(item.request)}
+                · ${esc(h.request)}
               </span>
 
             </strong>
 
             <p>
-              ${escapeHTML(item.detail)}
+              ${esc(h.detail)}
             </p>
 
             <small>
-              ${escapeHTML(item.date)}
+              ${esc(h.date)}
               · Responsável:
-              ${escapeHTML(item.user)}
+              ${esc(h.user)}
             </small>
 
           </div>
 
         </div>
-      `;
-    }
-  ).join("");
+      `
+    )
+    .join("");
 }
 
-function relatorios() {
+function reportsView() {
+  const total = db.requests.length;
 
-  const total =
-    db.requests.length;
+  const completed = db.requests.filter(
+    r => r.status === "Concluído"
+  ).length;
 
-  const concluidas =
-    db.requests.filter(
-      function(item) {
-        return item.status ===
-          "Concluído";
-      }
-    ).length;
+  const rejected = db.requests.filter(
+    r => r.status === "Reprovado"
+  ).length;
 
-  const reprovadas =
-    db.requests.filter(
-      function(item) {
-        return item.status ===
-          "Reprovado";
-      }
-    ).length;
+  const pendingSEI = db.requests.filter(
+    r =>
+      [
+        "Aguardando inserção no SEI",
+        "Pendência SEI"
+      ].includes(r.status)
+  ).length;
 
-  const aguardandoSEI =
-    db.requests.filter(
-      function(item) {
-        return [
-          "Aguardando inserção no SEI",
-          "Pendência SEI"
-        ].includes(item.status);
-      }
-    ).length;
-
-  const paginas =
-    db.requests.reduce(
-      function(total, item) {
-        return total +
-          Number(item.pages || 0);
-      },
-      0
-    );
-
-  const taxa =
-    total
-      ? Math.round(
-          concluidas /
-          total *
-          100
-        )
-      : 0;
+  const pages = db.requests.reduce(
+    (s, r) => s + (Number(r.pages) || 0),
+    0
+  );
 
   return `
     <div class="page-head">
@@ -1620,8 +1532,8 @@ function relatorios() {
         </h1>
 
         <p>
-          Informações consolidadas sobre
-          as atividades de digitalização.
+          Informações consolidadas sobre as
+          atividades de digitalização.
         </p>
 
       </div>
@@ -1639,62 +1551,44 @@ function relatorios() {
       style="margin-bottom:18px">
 
       <div class="kpi">
-        <span>
-          Total de solicitações
-        </span>
-        <strong>
-          ${total}
-        </strong>
+        <span>Total de solicitações</span>
+        <strong>${total}</strong>
       </div>
 
       <div class="kpi">
-        <span>
-          Taxa de conclusão
-        </span>
-        <strong>
-          ${taxa}%
-        </strong>
-      </div>
-
-      <div class="kpi">
-        <span>
-          Páginas digitalizadas
-        </span>
-        <strong>
-          ${paginas.toLocaleString("pt-BR")}
-        </strong>
-      </div>
-
-      <div class="kpi">
-        <span>
-          Reprovações
-        </span>
-        <strong>
-          ${reprovadas}
-        </strong>
-      </div>
-
-      <div class="kpi">
-        <span>
-          Aguardando SEI
-        </span>
-        <strong>
-          ${aguardandoSEI}
-        </strong>
-      </div>
-
-      <div class="kpi">
-        <span>
-          Usuários ativos
-        </span>
+        <span>Taxa de conclusão</span>
         <strong>
           ${
-            db.users.filter(
-              function(user) {
-                return user.active;
-              }
-            ).length
-          }
+            total
+              ? Math.round(
+                  (completed / total) * 100
+                )
+              : 0
+          }%
+        </strong>
+      </div>
+
+      <div class="kpi">
+        <span>Páginas digitalizadas</span>
+        <strong>
+          ${pages.toLocaleString("pt-BR")}
+        </strong>
+      </div>
+
+      <div class="kpi">
+        <span>Reprovações</span>
+        <strong>${rejected}</strong>
+      </div>
+
+      <div class="kpi">
+        <span>Aguardando SEI</span>
+        <strong>${pendingSEI}</strong>
+      </div>
+
+      <div class="kpi">
+        <span>Usuários ativos</span>
+        <strong>
+          ${db.users.filter(u => u.active).length}
         </strong>
       </div>
 
@@ -1705,47 +1599,49 @@ function relatorios() {
       <div class="card">
 
         <div class="card-head">
+
           <h2>
             Situação das solicitações
           </h2>
+
         </div>
 
         <div class="card-body">
 
-          ${Object.keys(statusMap).map(
-            function(status) {
-
-              const quantidade =
-                db.requests.filter(
-                  function(item) {
-                    return item.status ===
-                      status;
-                  }
+          ${
+            Object.keys(statusMap)
+              .map(s => {
+                const n = db.requests.filter(
+                  r => r.status === s
                 ).length;
 
-              return `
-                <div style="
-                  display:flex;
-                  justify-content:space-between;
-                  padding:9px 0;
-                  border-bottom:1px solid #eef1f3;
-                  font-size:10px
-                ">
+                return `
+                  <div
+                    style="
+                      display:flex;
+                      justify-content:space-between;
+                      padding:9px 0;
+                      border-bottom:1px solid #eef1f3;
+                      font-size:10px;
+                    "
+                  >
 
-                  <span>
-                    ${badgeStatus(status)}
-                  </span>
+                    <span>
+                      ${statusBadge(s)}
+                    </span>
 
-                  <strong>
-                    ${quantidade}
-                  </strong>
+                    <strong>
+                      ${n}
+                    </strong>
 
-                </div>
-              `;
-            }
-          ).join("")}
+                  </div>
+                `;
+              })
+              .join("")
+          }
 
         </div>
+
       </div>
 
       <div class="card">
@@ -1760,75 +1656,74 @@ function relatorios() {
 
         <div class="card-body">
 
-          ${db.users.map(
-            function(user) {
+          ${
+            db.users
+              .map(u => {
 
-              const quantidade =
-                db.requests.filter(
-                  function(item) {
-                    return item.responsible ===
-                      user.name;
-                  }
+                const n = db.requests.filter(
+                  r => r.responsible === u.name
                 ).length;
 
-              return `
-                <div style="
-                  display:flex;
-                  align-items:center;
-                  gap:10px;
-                  padding:9px 0;
-                  border-bottom:1px solid #eef1f3
-                ">
+                return `
+                  <div
+                    style="
+                      display:flex;
+                      align-items:center;
+                      gap:10px;
+                      padding:9px 0;
+                      border-bottom:1px solid #eef1f3
+                    "
+                  >
 
-                  <span class="avatar small">
-                    ${iniciais(user.name)}
-                  </span>
-
-                  <div style="flex:1">
-
-                    <strong style="
-                      font-size:10px;
-                      display:block
-                    ">
-                      ${escapeHTML(user.name)}
-                    </strong>
-
-                    <span class="muted">
-                      ${escapeHTML(user.profile)}
+                    <span class="avatar small">
+                      ${initials(u.name)}
                     </span>
 
+                    <div style="flex:1">
+
+                      <strong
+                        style="
+                          font-size:10px;
+                          display:block
+                        "
+                      >
+                        ${esc(u.name)}
+                      </strong>
+
+                      <span class="muted">
+                        ${esc(u.profile)}
+                      </span>
+
+                    </div>
+
+                    <strong>
+                      ${n}
+                    </strong>
+
                   </div>
-
-                  <strong>
-                    ${quantidade}
-                  </strong>
-
-                </div>
-              `;
-            }
-          ).join("")}
+                `;
+              })
+              .join("")
+          }
 
         </div>
+
       </div>
 
     </div>
   `;
 }
 
-function iniciais(nome) {
-
-  return nome
+function initials(name) {
+  return name
     .split(" ")
     .slice(0, 2)
-    .map(function(parte) {
-      return parte[0];
-    })
+    .map(x => x[0])
     .join("")
     .toUpperCase();
 }
 
-function usuarios() {
-
+function usersView() {
   return `
     <div class="page-head">
 
@@ -1873,94 +1768,94 @@ function usuarios() {
 
           <tbody>
 
-            ${db.users.map(
-              function(user) {
+            ${
+              db.users
+                .map(
+                  u => `
+                    <tr>
 
-                return `
-                  <tr>
+                      <td>
 
-                    <td>
+                        <div
+                          style="
+                            display:flex;
+                            align-items:center;
+                            gap:8px
+                          "
+                        >
 
-                      <div style="
-                        display:flex;
-                        align-items:center;
-                        gap:8px
-                      ">
+                          <span class="avatar small">
+                            ${initials(u.name)}
+                          </span>
 
-                        <span class="avatar small">
-                          ${iniciais(user.name)}
-                        </span>
+                          <strong>
+                            ${esc(u.name)}
+                          </strong>
 
-                        <strong>
-                          ${escapeHTML(user.name)}
-                        </strong>
+                        </div>
 
-                      </div>
+                      </td>
 
-                    </td>
+                      <td>
+                        ${esc(u.profile)}
+                      </td>
 
-                    <td>
-                      ${escapeHTML(user.profile)}
-                    </td>
+                      <td>
+                        ${esc(u.unit)}
+                      </td>
 
-                    <td>
-                      ${escapeHTML(user.unit)}
-                    </td>
-
-                    <td>
-
-                      ${
-                        user.active
-                          ? '<span class="badge green">Ativo</span>'
-                          : '<span class="badge gray">Inativo</span>'
-                      }
-
-                    </td>
-
-                    <td>
-
-                      <button
-                        class="btn sm"
-                        data-toggle-user="${user.id}">
+                      <td>
 
                         ${
-                          user.active
-                            ? "Desativar"
-                            : "Ativar"
+                          u.active
+                            ? '<span class="badge green">Ativo</span>'
+                            : '<span class="badge gray">Inativo</span>'
                         }
 
-                      </button>
+                      </td>
 
-                    </td>
+                      <td>
 
-                  </tr>
-                `;
-              }
-            ).join("")}
+                        <button
+                          class="btn sm"
+                          data-toggle-user="${u.id}">
+                          ${
+                            u.active
+                              ? "Desativar"
+                              : "Ativar"
+                          }
+                        </button>
+
+                      </td>
+
+                    </tr>
+                  `
+                )
+                .join("")
+            }
 
           </tbody>
 
         </table>
 
       </div>
+
     </div>
 
     <div
       class="notice"
       style="margin-top:15px">
 
-      Os perfis seguem os atores definidos
-      no Documento de Visão:
-      Solicitante, Operador de digitalização,
-      Conferente, Responsável pela inserção
-      no SEI, Gestor e Administrador.
+      Os perfis seguem os atores definidos no
+      Documento de Visão: Solicitante, Operador
+      de digitalização, Conferente, Responsável
+      pela inserção no SEI, Gestor e Administrador.
 
     </div>
   `;
 }
 
-function configuracoes() {
-
+function settingsView() {
   return `
     <div class="page-head">
 
@@ -1983,11 +1878,9 @@ function configuracoes() {
       <div class="card">
 
         <div class="card-head">
-
           <h2>
             Configurações do sistema
           </h2>
-
         </div>
 
         <div class="card-body">
@@ -2084,21 +1977,20 @@ function configuracoes() {
 
         <div class="card-body">
 
-          <p style="
-            font-size:11px;
-            line-height:1.6;
-            color:var(--muted)
-          ">
+          <p
+            style="
+              font-size:11px;
+              line-height:1.6;
+              color:var(--muted)
+            "
+          >
 
-            Esta primeira versão utiliza
-            o armazenamento local do navegador
-            para demonstração.
-
-            Em uma implantação real,
-            os registros, arquivos e trilhas
-            de auditoria devem ser transferidos
-            para um backend e banco de dados
-            apropriados.
+            Esta primeira versão utiliza o armazenamento
+            local do navegador para demonstração.
+            Em uma implantação real, os registros,
+            arquivos e trilhas de auditoria devem ser
+            transferidos para um backend e banco de
+            dados apropriados.
 
           </p>
 
@@ -2107,9 +1999,7 @@ function configuracoes() {
             <button
               class="btn danger"
               data-action="reset">
-
               Restaurar dados de demonstração
-
             </button>
 
           </div>
@@ -2122,26 +2012,12 @@ function configuracoes() {
   `;
 }
 
-function abrirModal(
-  titulo,
-  conteudo
-) {
-
-  const modal =
-    document.getElementById("modal");
-
-  const fundo =
-    document.getElementById(
-      "modalBackdrop"
-    );
-
-  if (!modal || !fundo) return;
-
-  modal.innerHTML = `
+function openModal(title, body, footer = "") {
+  document.getElementById("modal").innerHTML = `
     <div class="modal-head">
 
       <h2>
-        ${titulo}
+        ${title}
       </h2>
 
       <button
@@ -2154,33 +2030,33 @@ function abrirModal(
 
     <div class="modal-body">
 
-      ${conteudo}
+      ${body}
+
+      ${
+        footer
+          ? `<div class="form-footer">
+              ${footer}
+             </div>`
+          : ""
+      }
 
     </div>
   `;
 
-  fundo.classList.remove("hidden");
-
-  configurarEventosModal();
+  document
+    .getElementById("modalBackdrop")
+    .classList.remove("hidden");
 }
 
-function fecharModal() {
-
-  const fundo =
-    document.getElementById(
-      "modalBackdrop"
-    );
-
-  if (fundo) {
-    fundo.classList.add("hidden");
-  }
+function closeModal() {
+  document
+    .getElementById("modalBackdrop")
+    .classList.add("hidden");
 }
 
-function novaSolicitacaoModal() {
-
-  abrirModal(
+function newRequestModal() {
+  openModal(
     "Nova solicitação de digitalização",
-
     `
       <form id="requestForm">
 
@@ -2223,7 +2099,7 @@ function novaSolicitacaoModal() {
             <input
               type="date"
               name="date"
-              value="${dataAtual()}">
+              value="${todayISO()}">
 
           </div>
 
@@ -2277,7 +2153,8 @@ function novaSolicitacaoModal() {
             <textarea
               name="description"
               required
-              placeholder="Descreva os documentos encaminhados para digitalização."></textarea>
+              placeholder="Descreva os documentos encaminhados para digitalização."
+            ></textarea>
 
           </div>
 
@@ -2289,15 +2166,12 @@ function novaSolicitacaoModal() {
             type="button"
             class="btn"
             data-action="close-modal">
-
             Cancelar
-
           </button>
 
-          <button class="btn primary">
-
+          <button
+            class="btn primary">
             Cadastrar solicitação
-
           </button>
 
         </div>
@@ -2307,23 +2181,17 @@ function novaSolicitacaoModal() {
   );
 }
 
-function detalheSolicitacao(id) {
+function detailModal(id) {
+  const r = getRequest(id);
 
-  const item =
-    buscarSolicitacao(id);
+  if (!r) return;
 
-  if (!item) return;
+  const hist = db.history
+    .filter(h => h.request === id)
+    .slice(0, 8);
 
-  const historico =
-    db.history
-      .filter(function(registro) {
-        return registro.request === id;
-      })
-      .slice(0, 8);
-
-  abrirModal(
-    `Solicitação ${item.id}`,
-
+  openModal(
+    `Solicitação ${r.id}`,
     `
       <div class="detail-grid">
 
@@ -2334,81 +2202,72 @@ function detalheSolicitacao(id) {
             <div class="info">
               <label>Situação</label>
               <strong>
-                ${badgeStatus(item.status)}
+                ${statusBadge(r.status)}
               </strong>
             </div>
 
             <div class="info">
               <label>Prioridade</label>
               <strong>
-                ${escapeHTML(item.priority)}
+                ${esc(r.priority)}
               </strong>
             </div>
 
             <div class="info">
               <label>Unidade</label>
               <strong>
-                ${escapeHTML(item.unit)}
+                ${esc(r.unit)}
               </strong>
             </div>
 
             <div class="info">
               <label>Solicitante</label>
               <strong>
-                ${escapeHTML(item.requester)}
+                ${esc(r.requester)}
               </strong>
             </div>
 
             <div class="info">
               <label>Data</label>
               <strong>
-                ${formatarData(item.date)}
+                ${formatDate(r.date)}
               </strong>
             </div>
 
             <div class="info">
               <label>Documentos</label>
               <strong>
-                ${item.documents}
+                ${r.documents}
               </strong>
             </div>
 
             <div class="info">
               <label>Arquivo digital</label>
               <strong>
-                ${escapeHTML(
-                  item.file ||
-                  "Não associado"
-                )}
+                ${esc(r.file || "Não associado")}
               </strong>
             </div>
 
             <div class="info">
               <label>Formato / páginas</label>
               <strong>
-                ${escapeHTML(
-                  item.format || "—"
-                )}
-                /
-                ${item.pages || 0}
+                ${esc(r.format || "—")} /
+                ${r.pages || 0}
               </strong>
             </div>
 
             <div class="info">
               <label>Processo SEI</label>
               <strong>
-                ${escapeHTML(
-                  item.sei ||
-                  "Não informado"
-                )}
+                ${esc(r.sei || "Não informado")}
               </strong>
             </div>
 
             <div class="info">
               <label>Responsável atual</label>
               <strong>
-                ${escapeHTML(
-                  item.responsible ||
+                ${esc(
+                  r.responsible ||
                   "Não definido"
                 )}
               </strong>
@@ -2423,9 +2282,7 @@ function detalheSolicitacao(id) {
               </label>
 
               <strong>
-                ${escapeHTML(
-                  item.description
-                )}
+                ${esc(r.description)}
               </strong>
 
             </div>
@@ -2434,8 +2291,9 @@ function detalheSolicitacao(id) {
 
         </div>
 
-        <div class="card"
-             style="box-shadow:none">
+        <div
+          class="card"
+          style="box-shadow:none">
 
           <div class="card-head">
 
@@ -2450,8 +2308,8 @@ function detalheSolicitacao(id) {
             <div class="timeline">
 
               ${
-                historico.length
-                  ? linhasHistorico(historico)
+                hist.length
+                  ? historyRows(hist)
                   : '<div class="empty">Sem histórico.</div>'
               }
 
@@ -2466,18 +2324,27 @@ function detalheSolicitacao(id) {
   );
 }
 
-function abrirEtapa(id) {
+function stageModal(id) {
+  const r = getRequest(id);
 
-  const item =
-    buscarSolicitacao(id);
+  if (!r) return;
 
-  if (!item) return;
-
-  if (item.status === "Recebido") {
-
-    abrirModal(
-      `Registrar recebimento — ${item.id}`,
-
+  /*
+   * CORREÇÃO:
+   *
+   * Tanto "Solicitação" quanto "Recebido"
+   * pertencem à etapa de Recebimento.
+   *
+   * Antes o sistema verificava somente "Recebido".
+   * Isso fazia uma nova demanda abrir a tela
+   * errada de digitalização.
+   */
+  if (
+    r.status === "Solicitação" ||
+    r.status === "Recebido"
+  ) {
+    openModal(
+      `Registrar recebimento — ${r.id}`,
       `
         <form id="receiveForm">
 
@@ -2492,7 +2359,7 @@ function abrirEtapa(id) {
               <input
                 type="date"
                 name="date"
-                value="${dataAtual()}">
+                value="${todayISO()}">
 
             </div>
 
@@ -2504,24 +2371,22 @@ function abrirEtapa(id) {
 
               <select name="responsible">
 
-                ${db.users
-                  .filter(function(user) {
-                    return (
-                      user.profile ===
-                        "Operador de digitalização" ||
-                      user.profile === "Gestor"
-                    );
-                  })
-                  .map(function(user) {
-                    return `
-                      <option>
-                        ${escapeHTML(
-                          user.name
-                        )}
-                      </option>
-                    `;
-                  })
-                  .join("")}
+                ${
+                  db.users
+                    .filter(
+                      u =>
+                        u.profile ===
+                          "Operador de digitalização" ||
+                        u.profile === "Gestor"
+                    )
+                    .map(
+                      u =>
+                        `<option>
+                          ${esc(u.name)}
+                        </option>`
+                    )
+                    .join("")
+                }
 
               </select>
 
@@ -2535,7 +2400,8 @@ function abrirEtapa(id) {
 
               <textarea
                 name="notes"
-                placeholder="Condições do material, conferência inicial, ocorrências..."></textarea>
+                placeholder="Condições do material, conferência inicial, ocorrências..."
+              ></textarea>
 
             </div>
 
@@ -2547,15 +2413,12 @@ function abrirEtapa(id) {
               type="button"
               class="btn"
               data-action="close-modal">
-
               Cancelar
-
             </button>
 
-            <button class="btn primary">
-
+            <button
+              class="btn primary">
               Registrar recebimento
-
             </button>
 
           </div>
@@ -2564,148 +2427,151 @@ function abrirEtapa(id) {
       `
     );
 
-    return;
+  } else {
+
+    openModal(
+      `Registrar digitalização — ${r.id}`,
+      `
+        <form id="digitizeForm">
+
+          <div class="form-grid">
+
+            <div class="field">
+
+              <label>
+                Responsável
+              </label>
+
+              <select name="responsible">
+
+                ${
+                  db.users
+                    .filter(
+                      u =>
+                        u.profile ===
+                          "Operador de digitalização" ||
+                        u.profile === "Gestor"
+                    )
+                    .map(
+                      u =>
+                        `<option>
+                          ${esc(u.name)}
+                        </option>`
+                    )
+                    .join("")
+                }
+
+              </select>
+
+            </div>
+
+            <div class="field">
+
+              <label>
+                Quantidade de páginas
+                <span class="required">*</span>
+              </label>
+
+              <input
+                type="number"
+                min="1"
+                name="pages"
+                value="${r.pages || 1}"
+                required>
+
+            </div>
+
+            <div class="field">
+
+              <label>
+                Formato
+              </label>
+
+              <select name="format">
+
+                <option>
+                  PDF/A
+                </option>
+
+                <option>
+                  PDF
+                </option>
+
+                <option>
+                  TIFF
+                </option>
+
+                <option>
+                  JPEG
+                </option>
+
+              </select>
+
+            </div>
+
+            <div class="field">
+
+              <label>
+                Arquivo produzido
+              </label>
+
+              <input
+                name="file"
+                value="${esc(r.file)}"
+                placeholder="nome-do-arquivo.pdf">
+
+            </div>
+
+            <div class="field full">
+
+              <label>
+                Ocorrência / observações
+              </label>
+
+              <textarea
+                name="notes"
+                placeholder="Registre problemas, danos, ausência de páginas etc."
+              ></textarea>
+
+            </div>
+
+          </div>
+
+          <div class="form-footer">
+
+            <button
+              type="button"
+              class="btn"
+              data-action="close-modal">
+              Cancelar
+            </button>
+
+            <button
+              class="btn primary">
+              Concluir digitalização
+            </button>
+
+          </div>
+
+        </form>
+      `
+    );
   }
-
-  abrirModal(
-    `Registrar digitalização — ${item.id}`,
-
-    `
-      <form id="digitizeForm">
-
-        <div class="form-grid">
-
-          <div class="field">
-
-            <label>
-              Responsável
-            </label>
-
-            <select name="responsible">
-
-              ${db.users
-                .filter(function(user) {
-                  return (
-                    user.profile ===
-                      "Operador de digitalização" ||
-                    user.profile === "Gestor"
-                  );
-                })
-                .map(function(user) {
-                  return `
-                    <option>
-                      ${escapeHTML(
-                        user.name
-                      )}
-                    </option>
-                  `;
-                })
-                .join("")}
-
-            </select>
-
-          </div>
-
-          <div class="field">
-
-            <label>
-              Quantidade de páginas
-              <span class="required">*</span>
-            </label>
-
-            <input
-              type="number"
-              min="1"
-              name="pages"
-              value="${item.pages || 1}"
-              required>
-
-          </div>
-
-          <div class="field">
-
-            <label>
-              Formato
-            </label>
-
-            <select name="format">
-
-              <option>PDF/A</option>
-              <option>PDF</option>
-              <option>TIFF</option>
-              <option>JPEG</option>
-
-            </select>
-
-          </div>
-
-          <div class="field">
-
-            <label>
-              Arquivo produzido
-            </label>
-
-            <input
-              name="file"
-              value="${escapeHTML(item.file)}"
-              placeholder="nome-do-arquivo.pdf">
-
-          </div>
-
-          <div class="field full">
-
-            <label>
-              Ocorrência / observações
-            </label>
-
-            <textarea
-              name="notes"
-              placeholder="Registre problemas, danos, ausência de páginas etc."></textarea>
-
-          </div>
-
-        </div>
-
-        <div class="form-footer">
-
-          <button
-            type="button"
-            class="btn"
-            data-action="close-modal">
-
-            Cancelar
-
-          </button>
-
-          <button class="btn primary">
-
-            Concluir digitalização
-
-          </button>
-
-        </div>
-
-      </form>
-    `
-  );
 }
 
-function abrirConferencia(id) {
+function conferenceModal(id) {
+  const r = getRequest(id);
 
-  const item =
-    buscarSolicitacao(id);
+  if (!r) return;
 
-  if (!item) return;
-
-  abrirModal(
-    `Conferência — ${item.id}`,
-
+  openModal(
+    `Conferência — ${r.id}`,
     `
       <div class="file-box">
 
         <strong>
-          ${escapeHTML(
-            item.file ||
+          ${esc(
+            r.file ||
             "Arquivo não associado"
           )}
         </strong>
@@ -2714,10 +2580,10 @@ function abrirConferencia(id) {
           class="muted"
           style="margin-top:5px">
 
-          ${item.pages || 0}
+          ${r.pages || 0}
           páginas ·
-          ${escapeHTML(
-            item.format ||
+          ${esc(
+            r.format ||
             "Formato não informado"
           )}
 
@@ -2727,8 +2593,7 @@ function abrirConferencia(id) {
           class="muted"
           style="margin-top:10px">
 
-          Protótipo:
-          aqui será disponibilizada
+          Protótipo: aqui seria disponibilizada
           a visualização do representante digital.
 
         </div>
@@ -2736,15 +2601,13 @@ function abrirConferencia(id) {
       </div>
 
       <div
-        class="notice"
-        style="margin-top:15px">
+        style="margin-top:15px"
+        class="notice">
 
-        A conferência deve verificar
-        correspondência e completude.
-
-        Em caso de reprovação,
-        registre o motivo e encaminhe
-        para correção ou nova digitalização.
+        A conferência deve verificar correspondência
+        e completude. Em caso de reprovação, registre
+        o motivo e encaminhe para correção/nova
+        digitalização.
 
       </div>
 
@@ -2762,24 +2625,21 @@ function abrirConferencia(id) {
 
             <select name="responsible">
 
-              ${db.users
-                .filter(function(user) {
-                  return (
-                    user.profile ===
-                      "Conferente" ||
-                    user.profile === "Gestor"
-                  );
-                })
-                .map(function(user) {
-                  return `
-                    <option>
-                      ${escapeHTML(
-                        user.name
-                      )}
-                    </option>
-                  `;
-                })
-                .join("")}
+              ${
+                db.users
+                  .filter(
+                    u =>
+                      u.profile === "Conferente" ||
+                      u.profile === "Gestor"
+                  )
+                  .map(
+                    u =>
+                      `<option>
+                        ${esc(u.name)}
+                      </option>`
+                  )
+                  .join("")
+              }
 
             </select>
 
@@ -2813,7 +2673,8 @@ function abrirConferencia(id) {
 
             <textarea
               name="notes"
-              placeholder="Registre a justificativa ou observações da conferência."></textarea>
+              placeholder="Registre a justificativa ou observações da conferência."
+            ></textarea>
 
           </div>
 
@@ -2825,15 +2686,12 @@ function abrirConferencia(id) {
             type="button"
             class="btn"
             data-action="close-modal">
-
             Cancelar
-
           </button>
 
-          <button class="btn primary">
-
+          <button
+            class="btn primary">
             Registrar conferência
-
           </button>
 
         </div>
@@ -2843,16 +2701,13 @@ function abrirConferencia(id) {
   );
 }
 
-function abrirSEI(id) {
+function seiModal(id) {
+  const r = getRequest(id);
 
-  const item =
-    buscarSolicitacao(id);
+  if (!r) return;
 
-  if (!item) return;
-
-  abrirModal(
-    `Registrar inserção no SEI — ${item.id}`,
-
+  openModal(
+    `Registrar inserção no SEI — ${r.id}`,
     `
       <form id="seiForm">
 
@@ -2867,7 +2722,7 @@ function abrirSEI(id) {
 
             <input
               name="sei"
-              value="${escapeHTML(item.sei)}"
+              value="${esc(r.sei)}"
               required
               placeholder="00000.000000/0000-00">
 
@@ -2881,24 +2736,22 @@ function abrirSEI(id) {
 
             <select name="responsible">
 
-              ${db.users
-                .filter(function(user) {
-                  return (
-                    user.profile ===
-                      "Responsável pela inserção no SEI" ||
-                    user.profile === "Gestor"
-                  );
-                })
-                .map(function(user) {
-                  return `
-                    <option>
-                      ${escapeHTML(
-                        user.name
-                      )}
-                    </option>
-                  `;
-                })
-                .join("")}
+              ${
+                db.users
+                  .filter(
+                    u =>
+                      u.profile ===
+                        "Responsável pela inserção no SEI" ||
+                      u.profile === "Gestor"
+                  )
+                  .map(
+                    u =>
+                      `<option>
+                        ${esc(u.name)}
+                      </option>`
+                  )
+                  .join("")
+              }
 
             </select>
 
@@ -2913,7 +2766,7 @@ function abrirSEI(id) {
             <input
               type="date"
               name="date"
-              value="${dataAtual()}">
+              value="${todayISO()}">
 
           </div>
 
@@ -2948,15 +2801,12 @@ function abrirSEI(id) {
             type="button"
             class="btn"
             data-action="close-modal">
-
             Cancelar
-
           </button>
 
-          <button class="btn primary">
-
+          <button
+            class="btn primary">
             Concluir solicitação
-
           </button>
 
         </div>
@@ -2966,11 +2816,9 @@ function abrirSEI(id) {
   );
 }
 
-function novoUsuarioModal() {
-
-  abrirModal(
+function userModal() {
+  openModal(
     "Novo usuário",
-
     `
       <form id="userForm">
 
@@ -3048,15 +2896,12 @@ function novoUsuarioModal() {
             type="button"
             class="btn"
             data-action="close-modal">
-
             Cancelar
-
           </button>
 
-          <button class="btn primary">
-
+          <button
+            class="btn primary">
             Cadastrar usuário
-
           </button>
 
         </div>
@@ -3066,468 +2911,52 @@ function novoUsuarioModal() {
   );
 }
 
-function configurarEventosModal() {
-
-  document
-    .querySelectorAll(
-      "#modal [data-action='close-modal']"
-    )
-    .forEach(function(botao) {
-
-      botao.onclick =
-        fecharModal;
-
-    });
-
-  const formularioSolicitacao =
-    document.getElementById(
-      "requestForm"
-    );
-
-  if (formularioSolicitacao) {
-
-    formularioSolicitacao.addEventListener(
-      "submit",
-      function(evento) {
-
-        evento.preventDefault();
-
-        const dados =
-          new FormData(
-            formularioSolicitacao
-          );
-
-        const id =
-          gerarNumeroSolicitacao();
-
-        const item = {
-          id: id,
-          unit:
-            dados.get("unit"),
-          requester:
-            dados.get("requester"),
-          date:
-            dados.get("date") ||
-            dataAtual(),
-          description:
-            dados.get("description"),
-          documents:
-            Number(
-              dados.get("documents")
-            ),
-          status:
-            "Solicitação",
-          priority:
-            dados.get("priority"),
-          responsible:
-            dados.get("requester"),
-          sei: "",
-          pages: 0,
-          file: "",
-          format: ""
-        };
-
-        db.requests.unshift(item);
-
-        adicionarHistorico(
-          id,
-          "Solicitação criada",
-          item.requester,
-          `Solicitação encaminhada pela unidade ${item.unit}.`
-        );
-
-        salvarBanco();
-        fecharModal();
-
-        currentView =
-          "solicitacoes";
-
-        renderizar();
-
-        mostrarMensagem(
-          `Solicitação ${id} criada.`
-        );
-      }
-    );
-  }
-
-  const formularioRecebimento =
-    document.getElementById(
-      "receiveForm"
-    );
-
-  if (formularioRecebimento) {
-
-    formularioRecebimento.addEventListener(
-      "submit",
-      function(evento) {
-
-        evento.preventDefault();
-
-        const dados =
-          new FormData(
-            formularioRecebimento
-          );
-
-        const titulo =
-          document.querySelector(
-            "#modal h2"
-          );
-
-        const id =
-          titulo.textContent
-            .split("—")[1]
-            .trim();
-
-        const item =
-          buscarSolicitacao(id);
-
-        item.status =
-          "Aguardando digitalização";
-
-        item.responsible =
-          dados.get("responsible");
-
-        adicionarHistorico(
-          id,
-          "Recebimento registrado",
-          item.responsible,
-          dados.get("notes") ||
-            "Documento físico recebido."
-        );
-
-        salvarBanco();
-        fecharModal();
-        renderizar();
-
-        mostrarMensagem(
-          "Recebimento registrado."
-        );
-      }
-    );
-  }
-
-  const formularioDigitalizacao =
-    document.getElementById(
-      "digitizeForm"
-    );
-
-  if (formularioDigitalizacao) {
-
-    formularioDigitalizacao.addEventListener(
-      "submit",
-      function(evento) {
-
-        evento.preventDefault();
-
-        const dados =
-          new FormData(
-            formularioDigitalizacao
-          );
-
-        const titulo =
-          document.querySelector(
-            "#modal h2"
-          );
-
-        const id =
-          titulo.textContent
-            .split("—")[1]
-            .trim();
-
-        const item =
-          buscarSolicitacao(id);
-
-        item.status =
-          "Aguardando conferência";
-
-        item.responsible =
-          dados.get("responsible");
-
-        item.pages =
-          Number(
-            dados.get("pages")
-          );
-
-        item.file =
-          dados.get("file") ||
-          `${id.toLowerCase()}.pdf`;
-
-        item.format =
-          dados.get("format");
-
-        adicionarHistorico(
-          id,
-          "Digitalização realizada",
-          item.responsible,
-          `${item.pages} páginas associadas ao registro. ${
-            dados.get("notes") || ""
-          }`
-        );
-
-        salvarBanco();
-        fecharModal();
-        renderizar();
-
-        mostrarMensagem(
-          "Digitalização registrada e enviada para conferência."
-        );
-      }
-    );
-  }
-
-  const formularioConferencia =
-    document.getElementById(
-      "conferenceForm"
-    );
-
-  if (formularioConferencia) {
-
-    formularioConferencia.addEventListener(
-      "submit",
-      function(evento) {
-
-        evento.preventDefault();
-
-        const dados =
-          new FormData(
-            formularioConferencia
-          );
-
-        const titulo =
-          document.querySelector(
-            "#modal h2"
-          );
-
-        const id =
-          titulo.textContent
-            .split("—")[1]
-            .trim();
-
-        const item =
-          buscarSolicitacao(id);
-
-        item.responsible =
-          dados.get("responsible");
-
-        if (
-          dados.get("result") ===
-          "approved"
-        ) {
-
-          item.status =
-            "Aguardando inserção no SEI";
-
-          adicionarHistorico(
-            id,
-            "Conferência aprovada",
-            item.responsible,
-            `Documento liberado para inserção no SEI. ${
-              dados.get("notes") || ""
-            }`
-          );
-
-        } else {
-
-          item.status =
-            "Reprovado";
-
-          adicionarHistorico(
-            id,
-            "Conferência reprovada",
-            item.responsible,
-            `Correção/nova digitalização necessária. ${
-              dados.get("notes") || ""
-            }`
-          );
-        }
-
-        salvarBanco();
-        fecharModal();
-        renderizar();
-
-        mostrarMensagem(
-          "Conferência registrada."
-        );
-      }
-    );
-  }
-
-  const formularioSEI =
-    document.getElementById(
-      "seiForm"
-    );
-
-  if (formularioSEI) {
-
-    formularioSEI.addEventListener(
-      "submit",
-      function(evento) {
-
-        evento.preventDefault();
-
-        const dados =
-          new FormData(
-            formularioSEI
-          );
-
-        const titulo =
-          document.querySelector(
-            "#modal h2"
-          );
-
-        const id =
-          titulo.textContent
-            .split("—")[1]
-            .trim();
-
-        const item =
-          buscarSolicitacao(id);
-
-        item.status =
-          "Concluído";
-
-        item.sei =
-          dados.get("sei");
-
-        item.responsible =
-          dados.get("responsible");
-
-        adicionarHistorico(
-          id,
-          "Inserção no SEI registrada",
-          item.responsible,
-          `Processo SEI: ${item.sei}. Documento: ${
-            dados.get("seiDoc") ||
-            "não informado"
-          }. ${dados.get("notes") || ""}`
-        );
-
-        adicionarHistorico(
-          id,
-          "Solicitação concluída",
-          item.responsible,
-          "Fluxo concluído e registro disponível para consulta."
-        );
-
-        salvarBanco();
-        fecharModal();
-        renderizar();
-
-        mostrarMensagem(
-          "Inserção no SEI registrada. Solicitação concluída."
-        );
-      }
-    );
-  }
-
-  const formularioUsuario =
-    document.getElementById(
-      "userForm"
-    );
-
-  if (formularioUsuario) {
-
-    formularioUsuario.addEventListener(
-      "submit",
-      function(evento) {
-
-        evento.preventDefault();
-
-        const dados =
-          new FormData(
-            formularioUsuario
-          );
-
-        const maiorId =
-          Math.max(
-            0,
-            ...db.users.map(
-              function(user) {
-                return user.id;
-              }
-            )
-          );
-
-        db.users.push({
-          id: maiorId + 1,
-          name:
-            dados.get("name"),
-          profile:
-            dados.get("profile"),
-          unit:
-            dados.get("unit"),
-          active: true
-        });
-
-        salvarBanco();
-        fecharModal();
-        renderizar();
-
-        mostrarMensagem(
-          "Usuário cadastrado."
-        );
-      }
-    );
-  }
-}
-
-function configurarEventos() {
+function bindViewEvents() {
 
   document
     .querySelectorAll("[data-view]")
-    .forEach(function(botao) {
+    .forEach(btn => {
 
-      botao.onclick =
-        function() {
+      btn.onclick = () => {
 
-          currentView =
-            botao.dataset.view;
+        currentView = btn.dataset.view;
 
-          renderizar();
+        render();
 
-          const sidebar =
-            document.getElementById(
-              "sidebar"
-            );
+        const sidebar =
+          document.getElementById("sidebar");
 
-          if (sidebar) {
-            sidebar.classList.remove(
-              "open"
-            );
-          }
-        };
+        if (sidebar) {
+          sidebar.classList.remove("open");
+        }
+
+      };
 
     });
 
   document
     .querySelectorAll("[data-view-link]")
-    .forEach(function(botao) {
+    .forEach(btn => {
 
-      botao.onclick =
-        function() {
+      btn.onclick = () => {
 
-          currentView =
-            botao.dataset.viewLink;
+        currentView =
+          btn.dataset.viewLink;
 
-          renderizar();
+        render();
 
-        };
+      };
 
     });
 
   document
     .querySelectorAll("[data-detail]")
-    .forEach(function(botao) {
+    .forEach(btn => {
 
-      botao.onclick =
-        function() {
-
-          detalheSolicitacao(
-            botao.dataset.detail
-          );
-
-        };
+      btn.onclick = () =>
+        detailModal(
+          btn.dataset.detail
+        );
 
     });
 
@@ -3535,10 +2964,9 @@ function configurarEventos() {
     .querySelectorAll(
       "[data-action='new-request']"
     )
-    .forEach(function(botao) {
+    .forEach(btn => {
 
-      botao.onclick =
-        novaSolicitacaoModal;
+      btn.onclick = newRequestModal;
 
     });
 
@@ -3546,85 +2974,80 @@ function configurarEventos() {
     .querySelectorAll(
       "[data-action='new-user']"
     )
-    .forEach(function(botao) {
+    .forEach(btn => {
 
-      botao.onclick =
-        novoUsuarioModal;
+      btn.onclick = userModal;
+
+    });
+
+  document
+    .querySelectorAll(
+      "[data-action='close-modal']"
+    )
+    .forEach(btn => {
+
+      btn.onclick = closeModal;
 
     });
 
   document
     .querySelectorAll("[data-stage]")
-    .forEach(function(botao) {
+    .forEach(btn => {
 
-      botao.onclick =
-        function() {
-
-          abrirEtapa(
-            botao.dataset.stage
-          );
-
-        };
+      btn.onclick = () =>
+        stageModal(
+          btn.dataset.stage
+        );
 
     });
 
   document
     .querySelectorAll("[data-conference]")
-    .forEach(function(botao) {
+    .forEach(btn => {
 
-      botao.onclick =
-        function() {
-
-          abrirConferencia(
-            botao.dataset.conference
-          );
-
-        };
+      btn.onclick = () =>
+        conferenceModal(
+          btn.dataset.conference
+        );
 
     });
 
   document
     .querySelectorAll("[data-sei]")
-    .forEach(function(botao) {
+    .forEach(btn => {
 
-      botao.onclick =
-        function() {
-
-          abrirSEI(
-            botao.dataset.sei
-          );
-
-        };
+      btn.onclick = () =>
+        seiModal(
+          btn.dataset.sei
+        );
 
     });
 
   document
     .querySelectorAll("[data-toggle-user]")
-    .forEach(function(botao) {
+    .forEach(btn => {
 
-      botao.onclick =
-        function() {
+      btn.onclick = () => {
 
-          const usuario =
-            db.users.find(
-              function(user) {
-                return user.id ==
-                  botao.dataset.toggleUser;
-              }
-            );
+        const u = db.users.find(
+          x =>
+            x.id ==
+            btn.dataset.toggleUser
+        );
 
-          if (!usuario) return;
+        if (!u) return;
 
-          usuario.active =
-            !usuario.active;
+        u.active = !u.active;
 
-          salvarBanco();
-          renderizar();
+        saveDB();
 
-          mostrarMensagem(
-            "Situação do usuário atualizada."
-          );
-        };
+        render();
+
+        toast(
+          "Situação do usuário atualizada."
+        );
+
+      };
 
     });
 
@@ -3632,10 +3055,9 @@ function configurarEventos() {
     .querySelectorAll(
       "[data-action='export']"
     )
-    .forEach(function(botao) {
+    .forEach(btn => {
 
-      botao.onclick =
-        exportarCSV;
+      btn.onclick = exportCSV;
 
     });
 
@@ -3643,210 +3065,723 @@ function configurarEventos() {
     .querySelectorAll(
       "[data-action='reset']"
     )
-    .forEach(function(botao) {
+    .forEach(btn => {
 
-      botao.onclick =
-        function() {
+      btn.onclick = () => {
 
-          const confirmar =
-            confirm(
-              "Restaurar os dados de demonstração? As alterações locais serão perdidas."
-            );
+        if (
+          confirm(
+            "Restaurar os dados de demonstração? As alterações locais serão perdidas."
+          )
+        ) {
 
-          if (!confirmar) return;
+          db = structuredClone(seed);
 
-          db =
-            JSON.parse(
-              JSON.stringify(seed)
-            );
+          saveDB();
 
-          salvarBanco();
-          renderizar();
+          render();
 
-          mostrarMensagem(
+          toast(
             "Dados de demonstração restaurados."
           );
-        };
+
+        }
+
+      };
 
     });
 
-  configurarFiltros();
-}
-
-function configurarFiltros() {
-
-  const busca =
+  const search =
     document.getElementById(
       "requestSearch"
     );
 
-  const filtroStatus =
+  const sf =
     document.getElementById(
       "statusFilter"
     );
 
-  const filtroPrioridade =
+  const pf =
     document.getElementById(
       "priorityFilter"
     );
 
-  function filtrar() {
+  function filterRequests() {
 
-    if (!busca) return;
+    if (!search) return;
 
-    const texto =
-      busca.value
-        .toLowerCase()
-        .trim();
+    const q =
+      search.value.toLowerCase();
 
-    const status =
-      filtroStatus
-        ? filtroStatus.value
-        : "";
+    const s =
+      sf.value;
 
-    const prioridade =
-      filtroPrioridade
-        ? filtroPrioridade.value
-        : "";
+    const p =
+      pf.value;
 
-    const resultado =
+    const rows =
       db.requests.filter(
-        function(item) {
-
-          const textoItem =
+        r =>
+          (
+            !q ||
             [
-              item.id,
-              item.unit,
-              item.requester,
-              item.description
+              r.id,
+              r.unit,
+              r.requester,
+              r.description
             ]
               .join(" ")
-              .toLowerCase();
-
-          const passouTexto =
-            !texto ||
-            textoItem.includes(texto);
-
-          const passouStatus =
-            !status ||
-            item.status === status;
-
-          const passouPrioridade =
-            !prioridade ||
-            item.priority === prioridade;
-
-          return (
-            passouTexto &&
-            passouStatus &&
-            passouPrioridade
-          );
-        }
+              .toLowerCase()
+              .includes(q)
+          ) &&
+          (!s || r.status === s) &&
+          (!p || r.priority === p)
       );
 
-    const corpo =
+    const body =
       document.getElementById(
         "requestsBody"
       );
 
-    if (!corpo) return;
+    if (body) {
+      body.innerHTML =
+        requestRows(rows);
+    }
 
-    corpo.innerHTML =
-      linhasSolicitacoes(
-        resultado
-      );
+    document
+      .querySelectorAll("[data-detail]")
+      .forEach(btn => {
 
-    corpo
-      .querySelectorAll(
-        "[data-detail]"
-      )
-      .forEach(function(botao) {
-
-        botao.onclick =
-          function() {
-
-            detalheSolicitacao(
-              botao.dataset.detail
-            );
-
-          };
+        btn.onclick = () =>
+          detailModal(
+            btn.dataset.detail
+          );
 
       });
+
   }
 
-  if (busca) {
-    busca.addEventListener(
-      "input",
-      filtrar
-    );
-  }
+  [search, sf, pf].forEach(
+    x => {
 
-  if (filtroStatus) {
-    filtroStatus.addEventListener(
-      "change",
-      filtrar
-    );
-  }
+      if (x) {
+        x.addEventListener(
+          "input",
+          filterRequests
+        );
+      }
 
-  if (filtroPrioridade) {
-    filtroPrioridade.addEventListener(
-      "change",
-      filtrar
-    );
-  }
+    }
+  );
 
-  const buscaHistorico =
+  const hs =
     document.getElementById(
       "historySearch"
     );
 
-  if (buscaHistorico) {
+  if (hs) {
 
-    buscaHistorico.addEventListener(
+    hs.addEventListener(
       "input",
-      function() {
+      () => {
 
-        const texto =
-          buscaHistorico.value
-            .toLowerCase()
-            .trim();
+        const q =
+          hs.value.toLowerCase();
 
-        const resultado =
-          db.history.filter(
-            function(item) {
-
-              return [
-                item.request,
-                item.action,
-                item.user,
-                item.detail
-              ]
-                .join(" ")
-                .toLowerCase()
-                .includes(texto);
-
-            }
-          );
-
-        const lista =
+        const historyList =
           document.getElementById(
             "historyList"
           );
 
-        if (lista) {
-          lista.innerHTML =
-            linhasHistorico(
-              resultado
+        if (historyList) {
+
+          historyList.innerHTML =
+            historyRows(
+              db.history.filter(
+                h =>
+                  [
+                    h.request,
+                    h.action,
+                    h.user,
+                    h.detail
+                  ]
+                    .join(" ")
+                    .toLowerCase()
+                    .includes(q)
+              )
             );
+
         }
 
       }
     );
+
+  }
+
+  /*
+   * NOVA SOLICITAÇÃO
+   *
+   * A demanda é criada com status "Solicitação".
+   * Ela aparecerá automaticamente na etapa
+   * "Recebimento".
+   */
+
+  const requestForm =
+    document.getElementById(
+      "requestForm"
+    );
+
+  if (requestForm) {
+
+    requestForm.addEventListener(
+      "submit",
+      e => {
+
+        e.preventDefault();
+
+        const f =
+          new FormData(
+            e.target
+          );
+
+        const id =
+          nextId();
+
+        const r = {
+          id,
+
+          unit:
+            f.get("unit"),
+
+          requester:
+            f.get("requester"),
+
+          date:
+            f.get("date") ||
+            todayISO(),
+
+          description:
+            f.get("description"),
+
+          documents:
+            Number(
+              f.get("documents")
+            ),
+
+          /*
+           * A nova demanda começa aqui.
+           */
+          status:
+            "Solicitação",
+
+          priority:
+            f.get("priority"),
+
+          responsible:
+            f.get("requester"),
+
+          sei: "",
+
+          pages: 0,
+
+          file: "",
+
+          format: ""
+        };
+
+        db.requests.unshift(r);
+
+        addHistory(
+          id,
+          "Solicitação criada",
+          r.requester,
+          `Solicitação encaminhada pela unidade ${r.unit}.`
+        );
+
+        saveDB();
+
+        closeModal();
+
+        /*
+         * Após cadastrar, continua mostrando
+         * a lista de solicitações.
+         */
+        currentView =
+          "solicitacoes";
+
+        render();
+
+        toast(
+          `Solicitação ${id} criada e encaminhada para Recebimento.`
+        );
+
+      }
+    );
+
+  }
+
+  /*
+   * RECEBIMENTO
+   *
+   * Solicitação:
+   * Solicitação
+   *      ↓
+   * Recebimento registrado
+   *      ↓
+   * Aguardando digitalização
+   */
+
+  const receiveForm =
+    document.getElementById(
+      "receiveForm"
+    );
+
+  if (receiveForm) {
+
+    receiveForm.addEventListener(
+      "submit",
+      e => {
+
+        e.preventDefault();
+
+        const f =
+          new FormData(
+            e.target
+          );
+
+        const title =
+          document.querySelector(
+            "#modal h2"
+          );
+
+        if (!title) return;
+
+        const parts =
+          title.textContent.split("—");
+
+        const id =
+          parts[1]
+            ? parts[1].trim()
+            : "";
+
+        const r =
+          getRequest(id);
+
+        if (!r) return;
+
+        /*
+         * Depois do recebimento,
+         * a demanda vai para Digitalização.
+         */
+        r.status =
+          "Aguardando digitalização";
+
+        r.responsible =
+          f.get("responsible");
+
+        addHistory(
+          id,
+          "Recebimento registrado",
+          r.responsible,
+          f.get("notes") ||
+            "Documento físico recebido."
+        );
+
+        saveDB();
+
+        closeModal();
+
+        /*
+         * Vai diretamente para a próxima etapa
+         * para facilitar o acompanhamento.
+         */
+        currentView =
+          "digitalizacao";
+
+        render();
+
+        toast(
+          "Recebimento registrado. A demanda foi encaminhada para Digitalização."
+        );
+
+      }
+    );
+
+  }
+
+  /*
+   * DIGITALIZAÇÃO
+   *
+   * Aguardando digitalização
+   *      ↓
+   * Digitalização realizada
+   *      ↓
+   * Aguardando conferência
+   */
+
+  const digitizeForm =
+    document.getElementById(
+      "digitizeForm"
+    );
+
+  if (digitizeForm) {
+
+    digitizeForm.addEventListener(
+      "submit",
+      e => {
+
+        e.preventDefault();
+
+        const f =
+          new FormData(
+            e.target
+          );
+
+        const title =
+          document.querySelector(
+            "#modal h2"
+          );
+
+        if (!title) return;
+
+        const parts =
+          title.textContent.split("—");
+
+        const id =
+          parts[1]
+            ? parts[1].trim()
+            : "";
+
+        const r =
+          getRequest(id);
+
+        if (!r) return;
+
+        r.status =
+          "Aguardando conferência";
+
+        r.responsible =
+          f.get("responsible");
+
+        r.pages =
+          Number(
+            f.get("pages")
+          );
+
+        r.file =
+          f.get("file") ||
+          `${id.toLowerCase()}.pdf`;
+
+        r.format =
+          f.get("format");
+
+        addHistory(
+          id,
+          "Digitalização realizada",
+          r.responsible,
+          `${r.pages} páginas associadas ao registro. ${
+            f.get("notes") || ""
+          }`
+        );
+
+        saveDB();
+
+        closeModal();
+
+        currentView =
+          "conferencia";
+
+        render();
+
+        toast(
+          "Digitalização registrada. A demanda foi encaminhada para Conferência."
+        );
+
+      }
+    );
+
+  }
+
+  /*
+   * CONFERÊNCIA
+   *
+   * Aprovado:
+   * Conferência
+   *      ↓
+   * Aguardando inserção no SEI
+   *
+   * Reprovado:
+   * Conferência
+   *      ↓
+   * Reprovado
+   *      ↓
+   * Digitalização novamente
+   */
+
+  const conferenceForm =
+    document.getElementById(
+      "conferenceForm"
+    );
+
+  if (conferenceForm) {
+
+    conferenceForm.addEventListener(
+      "submit",
+      e => {
+
+        e.preventDefault();
+
+        const f =
+          new FormData(
+            e.target
+          );
+
+        const title =
+          document.querySelector(
+            "#modal h2"
+          );
+
+        if (!title) return;
+
+        const parts =
+          title.textContent.split("—");
+
+        const id =
+          parts[1]
+            ? parts[1].trim()
+            : "";
+
+        const r =
+          getRequest(id);
+
+        if (!r) return;
+
+        r.responsible =
+          f.get("responsible");
+
+        if (
+          f.get("result") ===
+          "approved"
+        ) {
+
+          r.status =
+            "Aguardando inserção no SEI";
+
+          addHistory(
+            id,
+            "Conferência aprovada",
+            r.responsible,
+            `Documento liberado para inserção no SEI. ${
+              f.get("notes") || ""
+            }`
+          );
+
+          saveDB();
+
+          closeModal();
+
+          currentView =
+            "sei";
+
+          render();
+
+          toast(
+            "Conferência aprovada. A demanda foi encaminhada para Inserção no SEI."
+          );
+
+        } else {
+
+          r.status =
+            "Reprovado";
+
+          addHistory(
+            id,
+            "Conferência reprovada",
+            r.responsible,
+            `Correção/nova digitalização necessária. ${
+              f.get("notes") || ""
+            }`
+          );
+
+          saveDB();
+
+          closeModal();
+
+          currentView =
+            "digitalizacao";
+
+          render();
+
+          toast(
+            "Conferência reprovada. A demanda retornou para Digitalização."
+          );
+
+        }
+
+      }
+    );
+
+  }
+
+  /*
+   * INSERÇÃO NO SEI
+   *
+   * Aguardando inserção no SEI
+   *      ↓
+   * Inserção registrada
+   *      ↓
+   * Concluído
+   */
+
+  const seiForm =
+    document.getElementById(
+      "seiForm"
+    );
+
+  if (seiForm) {
+
+    seiForm.addEventListener(
+      "submit",
+      e => {
+
+        e.preventDefault();
+
+        const f =
+          new FormData(
+            e.target
+          );
+
+        const title =
+          document.querySelector(
+            "#modal h2"
+          );
+
+        if (!title) return;
+
+        const parts =
+          title.textContent.split("—");
+
+        const id =
+          parts[1]
+            ? parts[1].trim()
+            : "";
+
+        const r =
+          getRequest(id);
+
+        if (!r) return;
+
+        r.status =
+          "Concluído";
+
+        r.sei =
+          f.get("sei");
+
+        r.responsible =
+          f.get("responsible");
+
+        addHistory(
+          id,
+          "Inserção no SEI registrada",
+          r.responsible,
+          `Processo SEI: ${r.sei}. Documento: ${
+            f.get("seiDoc") ||
+            "não informado"
+          }. ${
+            f.get("notes") || ""
+          }`
+        );
+
+        addHistory(
+          id,
+          "Solicitação concluída",
+          r.responsible,
+          "Fluxo concluído e registro disponível para consulta."
+        );
+
+        saveDB();
+
+        closeModal();
+
+        currentView =
+          "solicitacoes";
+
+        render();
+
+        toast(
+          "Inserção no SEI registrada. Solicitação concluída."
+        );
+
+      }
+    );
+
+  }
+
+  /*
+   * USUÁRIO
+   */
+
+  const userForm =
+    document.getElementById(
+      "userForm"
+    );
+
+  if (userForm) {
+
+    userForm.addEventListener(
+      "submit",
+      e => {
+
+        e.preventDefault();
+
+        const f =
+          new FormData(
+            e.target
+          );
+
+        const id =
+          Math.max(
+            0,
+            ...db.users.map(
+              u => u.id
+            )
+          ) + 1;
+
+        db.users.push({
+          id,
+
+          name:
+            f.get("name"),
+
+          profile:
+            f.get("profile"),
+
+          unit:
+            f.get("unit"),
+
+          active:
+            true
+        });
+
+        saveDB();
+
+        closeModal();
+
+        render();
+
+        toast(
+          "Usuário cadastrado."
+        );
+
+      }
+    );
+
   }
 }
 
-function exportarCSV() {
+function exportCSV() {
 
-  const cabecalho = [
+  const headers = [
     "Solicitação",
     "Unidade",
     "Solicitante",
@@ -3861,53 +3796,43 @@ function exportarCSV() {
     "Processo SEI"
   ];
 
-  const linhas = [
-    cabecalho
+  const lines = [
+    headers,
+
+    ...db.requests.map(
+      r => [
+        r.id,
+        r.unit,
+        r.requester,
+        r.date,
+        r.documents,
+        r.status,
+        r.priority,
+        r.responsible,
+        r.pages,
+        r.format,
+        r.file,
+        r.sei
+      ]
+    )
   ];
-
-  db.requests.forEach(
-    function(item) {
-
-      linhas.push([
-        item.id,
-        item.unit,
-        item.requester,
-        item.date,
-        item.documents,
-        item.status,
-        item.priority,
-        item.responsible,
-        item.pages,
-        item.format,
-        item.file,
-        item.sei
-      ]);
-
-    }
-  );
 
   const csv =
     "\uFEFF" +
-    linhas
+    lines
       .map(
-        function(linha) {
-
-          return linha
+        row =>
+          row
             .map(
-              function(valor) {
-
-                return `"${String(
-                  valor ?? ""
+              v =>
+                `"${String(
+                  v ?? ""
                 ).replace(
                   /"/g,
                   '""'
-                )}"`;
-
-              }
+                )}"`
             )
-            .join(";");
-
-        }
+            .join(";")
       )
       .join("\n");
 
@@ -3920,96 +3845,90 @@ function exportarCSV() {
       }
     );
 
-  const url =
-    URL.createObjectURL(
-      blob
-    );
-
-  const link =
+  const a =
     document.createElement(
       "a"
     );
 
-  link.href = url;
-  link.download =
+  a.href =
+    URL.createObjectURL(
+      blob
+    );
+
+  a.download =
     "sid-sei-solicitacoes.csv";
 
-  document.body.appendChild(
-    link
+  a.click();
+
+  URL.revokeObjectURL(
+    a.href
   );
 
-  link.click();
-
-  link.remove();
-
-  URL.revokeObjectURL(url);
-
-  mostrarMensagem(
+  toast(
     "Relatório CSV exportado."
   );
 }
 
-const menuMobile =
+const mobileMenu =
   document.getElementById(
     "mobileMenu"
   );
 
-if (menuMobile) {
+if (mobileMenu) {
 
-  menuMobile.onclick =
-    function() {
+  mobileMenu.onclick = () => {
 
-      const sidebar =
-        document.getElementById(
-          "sidebar"
-        );
+    const sidebar =
+      document.getElementById(
+        "sidebar"
+      );
 
-      if (sidebar) {
-        sidebar.classList.toggle(
-          "open"
-        );
-      }
+    if (sidebar) {
+      sidebar.classList.toggle(
+        "open"
+      );
+    }
 
-    };
+  };
+
 }
 
-const fundoModal =
+const modalBackdrop =
   document.getElementById(
     "modalBackdrop"
   );
 
-if (fundoModal) {
+if (modalBackdrop) {
 
-  fundoModal.addEventListener(
+  modalBackdrop.addEventListener(
     "click",
-    function(evento) {
+    e => {
 
       if (
-        evento.target.id ===
+        e.target.id ===
         "modalBackdrop"
       ) {
-        fecharModal();
+        closeModal();
       }
 
     }
   );
+
 }
 
-const notificacoes =
+const notificationsBtn =
   document.getElementById(
     "notificationsBtn"
   );
 
-if (notificacoes) {
+if (notificationsBtn) {
 
-  notificacoes.onclick =
-    function() {
-
-      mostrarMensagem(
+  notificationsBtn.onclick =
+    () =>
+      toast(
         "Não há novas notificações críticas."
       );
 
-    };
 }
 
-renderizar();
+render();
