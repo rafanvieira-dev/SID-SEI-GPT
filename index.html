@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="SID-SEI — Sistema de Controle de Digitalização e Inserção no SEI">
+  <title>SID-SEI | Controle de Digitalização e Inserção no SEI</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="toast" class="toast" role="status"></div>
+
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <div class="brand-mark">S</div>
+        <div>
+          <strong>SID-SEI</strong>
+          <span>Controle documental</span>
+        </div>
+      </div>
+
+      <nav class="main-nav" aria-label="Navegação principal">
+        <button class="nav-item active" data-view="dashboard"><span>▦</span> Dashboard</button>
+        <button class="nav-item" data-view="solicitacoes"><span>▤</span> Solicitações</button>
+        <button class="nav-item" data-view="recebimento"><span>↓</span> Recebimento</button>
+        <button class="nav-item" data-view="digitalizacao"><span>▧</span> Digitalização</button>
+        <button class="nav-item" data-view="conferencia"><span>✓</span> Conferência</button>
+        <button class="nav-item" data-view="sei"><span>SEI</span> Inserção no SEI</button>
+        <button class="nav-item" data-view="historico"><span>◷</span> Histórico</button>
+        <button class="nav-item" data-view="relatorios"><span>▥</span> Relatórios</button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <button class="nav-item" data-view="usuarios"><span>♙</span> Usuários</button>
+        <button class="nav-item" data-view="configuracoes"><span>⚙</span> Configurações</button>
+        <div class="role-card">
+          <span class="avatar">GV</span>
+          <div>
+            <strong>Gestor</strong>
+            <small>Administrador</small>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <button class="mobile-menu" id="mobileMenu" aria-label="Abrir menu">☰</button>
+        <div class="breadcrumb" id="breadcrumb">Dashboard</div>
+        <div class="topbar-actions">
+          <button class="icon-btn" id="notificationsBtn" title="Notificações">♢<span class="notification-dot"></span></button>
+          <div class="user-chip"><span class="avatar small">GV</span><span>Gestor</span></div>
+        </div>
+      </header>
+
+      <section id="app" class="content"></section>
+    </main>
+  </div>
+
+  <div class="modal-backdrop hidden" id="modalBackdrop">
+    <div class="modal" id="modal"></div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
